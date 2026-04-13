@@ -5,6 +5,7 @@ data class SentItem(
     val productName: String,
     val quantity: Int,
     val department: Department,
+    val courseNumber: Int,
     val sendRound: Int,
     val status: ItemSendStatus = ItemSendStatus.SENT
 )

@@ -2,6 +2,7 @@ package com.citovich.smartordex.ui.screens.open
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -10,6 +11,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -58,13 +60,38 @@ fun OpenTableScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    OutlinedTextField(
-                        value = if (coversCount == 0) "" else coversCount.toString(),
-                        onValueChange = { onCoversCountChange(it.toIntOrNull() ?: 0) },
-                        label = { Text("Coperti") },
+                    Text("Coperti")
+
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                onCoversCountChange((coversCount - 1).coerceAtLeast(0))
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = coversCount > 0
+                        ) {
+                            Text("-")
+                        }
+
+                        Button(
+                            onClick = {},
+                            modifier = Modifier.weight(1.4f)
+                        ) {
+                            Text(coversCount.toString())
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                onCoversCountChange(coversCount + 1)
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("+")
+                        }
+                    }
 
                     OutlinedTextField(
                         value = if (coverPrice == 0.0) "" else coverPrice.toString(),
@@ -86,7 +113,7 @@ fun OpenTableScreen(
                 Text("Apri Tavolo")
             }
 
-            Button(
+            OutlinedButton(
                 onClick = onBackClick,
                 modifier = Modifier.fillMaxWidth()
             ) {

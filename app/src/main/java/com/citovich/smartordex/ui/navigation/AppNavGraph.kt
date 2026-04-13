@@ -51,6 +51,7 @@ fun AppNavGraph() {
     var coverPrice by remember { mutableStateOf(2.5) }
     var paymentType by remember { mutableStateOf(PaymentType.CASH) }
     var sendRoundCounter by remember { mutableStateOf(1) }
+    var currentCourse by remember { mutableStateOf(1) }
 
     NavHost(
         navController = navController,
@@ -111,6 +112,7 @@ fun AppNavGraph() {
                 onOpenTableClick = {
                     cartItems.clear()
                     sendRoundCounter = 1
+                    currentCourse = 1
                     navController.navigate(Routes.NEW_ORDER)
                 },
                 onBackClick = {
@@ -122,9 +124,16 @@ fun AppNavGraph() {
         composable(Routes.NEW_ORDER) {
             NewOrderScreen(
                 cartItems = cartItems,
-                onAddProduct = { product, courseNumber ->
-                    addToCart(cartItems, product, courseNumber)
+                currentCourse = currentCourse,
+                onDecreaseCourse = {
+                    if (currentCourse > 1) currentCourse--
                 },
+                onIncreaseCourse = {
+                    currentCourse++
+                },
+                onAddProduct = { product, courseNumber, quantity ->
+    addToCart(cartItems, product, courseNumber, quantity)
+},
                 onBackClick = {
                     navController.popBackStack()
                 },
@@ -155,34 +164,42 @@ fun AppNavGraph() {
                 onRemoveItem = { item ->
                     removeItem(cartItems, item)
                 },
-                onToggleItemSelection = { item ->
-                    toggleItemSelection(cartItems, item)
-                },
-                onBackClick = {
-                    navController.popBackStack()
-                },
-                onSendOrderClick = {
+                onSendCourseClick = { courseNumber ->
                     if (tableNumber.isBlank()) return@CartScreen
 
-                    val selectedItems = cartItems.filter {
-                        it.selectedForSend && it.sendStatus == ItemSendStatus.NOT_SENT
+                    val courseItemsToSend = cartItems.filter {
+                        it.courseNumber == courseNumber &&
+                            it.sendStatus == ItemSendStatus.NOT_SENT
                     }
 
-                    selectedItems.forEach { item ->
+                    courseItemsToSend.forEach { item ->
                         sentItems.add(
                             SentItem(
                                 tableNumber = tableNumber,
                                 productName = item.product.name,
                                 quantity = item.quantity,
                                 department = item.product.department,
+                                courseNumber = item.courseNumber,
                                 sendRound = sendRoundCounter,
                                 status = ItemSendStatus.SENT
                             )
                         )
                     }
 
-                    markSelectedItemsAsSent(cartItems, sendRoundCounter)
+                    markCourseAsSent(
+                        cartItems = cartItems,
+                        courseNumber = courseNumber,
+                        sendRound = sendRoundCounter
+                    )
+
                     sendRoundCounter++
+
+                    if (currentCourse <= courseNumber) {
+                        currentCourse = courseNumber + 1
+                    }
+                },
+                onBackClick = {
+                    navController.popBackStack()
                 },
                 onCloseTableClick = {
                     navController.navigate(Routes.CLOSE_TABLE)
@@ -210,6 +227,7 @@ fun AppNavGraph() {
                     coverPrice = 2.5
                     paymentType = PaymentType.CASH
                     sendRoundCounter = 1
+                    currentCourse = 1
 
                     navController.navigate(Routes.HOME) {
                         popUpTo(Routes.HOME) { inclusive = true }
@@ -229,7 +247,8 @@ fun AppNavGraph() {
 private fun addToCart(
     cartItems: MutableList<CartItem>,
     product: Product,
-    courseNumber: Int
+    courseNumber: Int,
+    quantityToAdd: Int
 ) {
     val index = cartItems.indexOfFirst {
         it.product.id == product.id &&
@@ -239,12 +258,12 @@ private fun addToCart(
 
     if (index >= 0) {
         val current = cartItems[index]
-        cartItems[index] = current.copy(quantity = current.quantity + 1)
+        cartItems[index] = current.copy(quantity = current.quantity + quantityToAdd)
     } else {
         cartItems.add(
             CartItem(
                 product = product,
-                quantity = 1,
+                quantity = quantityToAdd,
                 courseNumber = courseNumber
             )
         )
@@ -287,36 +306,15 @@ private fun removeItem(
     }
 }
 
-private fun toggleItemSelection(
+private fun markCourseAsSent(
     cartItems: MutableList<CartItem>,
-    itemToToggle: CartItem
-) {
-    val index = cartItems.indexOfFirst {
-        it.product.id == itemToToggle.product.id &&
-            it.courseNumber == itemToToggle.courseNumber &&
-            it.sendStatus == itemToToggle.sendStatus &&
-            it.sendRound == itemToToggle.sendRound
-    }
-
-    if (index >= 0) {
-        val current = cartItems[index]
-        if (current.sendStatus == ItemSendStatus.NOT_SENT) {
-            cartItems[index] = current.copy(
-                selectedForSend = !current.selectedForSend
-            )
-        }
-    }
-}
-
-private fun markSelectedItemsAsSent(
-    cartItems: MutableList<CartItem>,
+    courseNumber: Int,
     sendRound: Int
 ) {
     cartItems.indices.forEach { index ->
         val item = cartItems[index]
-        if (item.selectedForSend && item.sendStatus == ItemSendStatus.NOT_SENT) {
+        if (item.courseNumber == courseNumber && item.sendStatus == ItemSendStatus.NOT_SENT) {
             cartItems[index] = item.copy(
-                selectedForSend = false,
                 sendStatus = ItemSendStatus.SENT,
                 sendRound = sendRound
             )

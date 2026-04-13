@@ -21,11 +21,8 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.citovich.smartordex.domain.model.CartItem
@@ -37,16 +34,21 @@ import com.citovich.smartordex.domain.model.fakeProducts
 @Composable
 fun NewOrderScreen(
     cartItems: List<CartItem>,
-    onAddProduct: (Product, Int) -> Unit,
+    currentCourse: Int,
+    onDecreaseCourse: () -> Unit,
+    onIncreaseCourse: () -> Unit,
+    onAddProduct: (Product, Int, Int) -> Unit,
     onBackClick: () -> Unit,
     onGoToCartClick: () -> Unit
 ) {
     val categories = Category.entries
-    var selectedCategory by remember { mutableStateOf(Category.FOOD) }
-    var currentCourse by remember { mutableIntStateOf(1) }
+    val selectedCategoryState = remember { androidx.compose.runtime.mutableStateOf(Category.DRINK) }
+    val selectedCategory = selectedCategoryState.value
+
+    val productCourseMap = remember { mutableStateMapOf<String, Int>() }
+    val productQuantityMap = remember { mutableStateMapOf<String, Int>() }
 
     val filteredProducts = fakeProducts.filter { it.category == selectedCategory }
-    val currentCourseItems = cartItems.filter { it.courseNumber == currentCourse }
 
     Scaffold(
         modifier = Modifier.statusBarsPadding(),
@@ -61,14 +63,10 @@ fun NewOrderScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            CourseSelector(
+            GlobalCourseHeader(
                 currentCourse = currentCourse,
-                onDecreaseCourse = {
-                    if (currentCourse > 1) currentCourse--
-                },
-                onIncreaseCourse = {
-                    currentCourse++
-                }
+                onDecreaseCourse = onDecreaseCourse,
+                onIncreaseCourse = onIncreaseCourse
             )
 
             ScrollableTabRow(
@@ -77,39 +75,56 @@ fun NewOrderScreen(
                 categories.forEach { category ->
                     Tab(
                         selected = selectedCategory == category,
-                        onClick = { selectedCategory = category },
+                        onClick = { selectedCategoryState.value = category },
                         text = { Text(category.toReadableText()) }
                     )
                 }
             }
 
             Text(
-                text = "Prodotti - Portata $currentCourse",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(16.dp)
+                text = "Categoria: ${selectedCategory.toReadableText()}",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
 
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(bottom = 16.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 12.dp)
             ) {
-                items(filteredProducts) { product ->
+                items(filteredProducts, key = { it.id }) { product ->
+                    val selectedCourse = productCourseMap[product.id] ?: currentCourse
+                    val selectedQuantity = productQuantityMap[product.id] ?: 1
+
                     ProductCard(
                         product = product,
-                        currentCourse = currentCourse,
+                        selectedCourse = selectedCourse,
+                        selectedQuantity = selectedQuantity,
+                        onDecreaseCourse = {
+                            val newValue = (selectedCourse - 1).coerceAtLeast(1)
+                            productCourseMap[product.id] = newValue
+                        },
+                        onIncreaseCourse = {
+                            productCourseMap[product.id] = selectedCourse + 1
+                        },
+                        onDecreaseQuantity = {
+                            val newValue = (selectedQuantity - 1).coerceAtLeast(1)
+                            productQuantityMap[product.id] = newValue
+                        },
+                        onIncreaseQuantity = {
+                            productQuantityMap[product.id] = selectedQuantity + 1
+                        },
                         onAddClick = {
-                            onAddProduct(product, currentCourse)
+                            onAddProduct(product, selectedCourse, selectedQuantity)
+                            productQuantityMap[product.id] = 1
                         }
                     )
                 }
             }
 
             CartSummary(
-                currentCourse = currentCourse,
-                currentCourseItemsCount = currentCourseItems.sumOf { it.quantity },
                 totalItemsCount = cartItems.sumOf { it.quantity },
                 total = cartItems.sumOf { it.product.price * it.quantity },
                 onBackClick = onBackClick,
@@ -120,7 +135,7 @@ fun NewOrderScreen(
 }
 
 @Composable
-private fun CourseSelector(
+private fun GlobalCourseHeader(
     currentCourse: Int,
     onDecreaseCourse: () -> Unit,
     onIncreaseCourse: () -> Unit
@@ -131,17 +146,17 @@ private fun CourseSelector(
             .padding(16.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Portata corrente",
+                text = "Portata predefinita",
                 style = MaterialTheme.typography.titleMedium
             )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedButton(
                     onClick = onDecreaseCourse,
@@ -153,16 +168,16 @@ private fun CourseSelector(
 
                 Button(
                     onClick = {},
-                    modifier = Modifier.weight(2f)
+                    modifier = Modifier.weight(1.4f)
                 ) {
                     Text("Portata $currentCourse")
                 }
 
                 OutlinedButton(
                     onClick = onIncreaseCourse,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1.4f)
                 ) {
-                    Text("+")
+                    Text("Avvia ${currentCourse + 1}")
                 }
             }
         }
@@ -172,14 +187,17 @@ private fun CourseSelector(
 @Composable
 private fun ProductCard(
     product: Product,
-    currentCourse: Int,
+    selectedCourse: Int,
+    selectedQuantity: Int,
+    onDecreaseCourse: () -> Unit,
+    onIncreaseCourse: () -> Unit,
+    onDecreaseQuantity: () -> Unit,
+    onIncreaseQuantity: () -> Unit,
     onAddClick: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    Card(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
@@ -187,26 +205,78 @@ private fun ProductCard(
                 style = MaterialTheme.typography.titleMedium
             )
 
-            Text(
-                text = "€ %.2f".format(product.price),
-                style = MaterialTheme.typography.bodyLarge
-            )
+            Text("€ %.2f".format(product.price))
+            Text("Reparto: ${product.department.toReadableText()}")
 
             Text(
-                text = "Reparto: ${product.department.toReadableText()}",
+                text = "Quantità",
                 style = MaterialTheme.typography.bodyMedium
             )
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onDecreaseQuantity,
+                    modifier = Modifier.weight(1f),
+                    enabled = selectedQuantity > 1
+                ) {
+                    Text("-")
+                }
+
+                Button(
+                    onClick = {},
+                    modifier = Modifier.weight(1.2f)
+                ) {
+                    Text(selectedQuantity.toString())
+                }
+
+                OutlinedButton(
+                    onClick = onIncreaseQuantity,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("+")
+                }
+            }
+
             Text(
-                text = "Portata: $currentCourse",
+                text = "Portata",
                 style = MaterialTheme.typography.bodyMedium
             )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onDecreaseCourse,
+                    modifier = Modifier.weight(1f),
+                    enabled = selectedCourse > 1
+                ) {
+                    Text("-")
+                }
+
+                Button(
+                    onClick = {},
+                    modifier = Modifier.weight(1.3f)
+                ) {
+                    Text("Portata $selectedCourse")
+                }
+
+                OutlinedButton(
+                    onClick = onIncreaseCourse,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("+")
+                }
+            }
 
             Button(
                 onClick = onAddClick,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Aggiungi a Portata $currentCourse")
+                Text("Aggiungi")
             }
         }
     }
@@ -214,8 +284,6 @@ private fun ProductCard(
 
 @Composable
 private fun CartSummary(
-    currentCourse: Int,
-    currentCourseItemsCount: Int,
     totalItemsCount: Int,
     total: Double,
     onBackClick: () -> Unit,
@@ -227,39 +295,22 @@ private fun CartSummary(
             .padding(16.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
                 text = "Riepilogo ordine",
                 style = MaterialTheme.typography.titleMedium
             )
 
-            Text(
-                text = "Portata corrente: $currentCourse",
-                style = MaterialTheme.typography.bodyLarge
-            )
-
-            Text(
-                text = "Articoli in Portata $currentCourse: $currentCourseItemsCount",
-                style = MaterialTheme.typography.bodyLarge
-            )
-
-            Text(
-                text = "Totale articoli ordine: $totalItemsCount",
-                style = MaterialTheme.typography.bodyLarge
-            )
-
-            Text(
-                text = "Totale parziale: € %.2f".format(total),
-                style = MaterialTheme.typography.bodyLarge
-            )
+            Text("Articoli totali: $totalItemsCount")
+            Text("Totale: € %.2f".format(total))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Button(
+                OutlinedButton(
                     onClick = onBackClick,
                     modifier = Modifier.weight(1f)
                 ) {
@@ -270,7 +321,7 @@ private fun CartSummary(
                     onClick = onGoToCartClick,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Vai a Gestione Tavolo")
+                    Text("Gestione Tavolo")
                 }
             }
         }
