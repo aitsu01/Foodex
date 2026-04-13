@@ -17,6 +17,8 @@ import com.citovich.smartordex.domain.model.OrderDraft
 import com.citovich.smartordex.domain.model.PaymentType
 import com.citovich.smartordex.domain.model.Product
 import com.citovich.smartordex.domain.model.SentItem
+import com.citovich.smartordex.domain.model.TableSession
+import com.citovich.smartordex.domain.model.TableStatus
 import com.citovich.smartordex.domain.model.UserRole
 import com.citovich.smartordex.ui.screens.cart.CartScreen
 import com.citovich.smartordex.ui.screens.close.CloseTableScreen
@@ -26,6 +28,7 @@ import com.citovich.smartordex.ui.screens.kitchen.KitchenMonitorScreen
 import com.citovich.smartordex.ui.screens.login.LoginScreen
 import com.citovich.smartordex.ui.screens.open.OpenTableScreen
 import com.citovich.smartordex.ui.screens.order.NewOrderScreen
+import com.citovich.smartordex.ui.screens.tablemap.TableMapScreen
 
 object Routes {
     const val DEVICE = "device"
@@ -36,6 +39,7 @@ object Routes {
     const val CART = "cart"
     const val CLOSE_TABLE = "close_table"
     const val KITCHEN_MONITOR = "kitchen_monitor"
+    const val TABLE_MAP = "table_map"
 }
 
 @Composable
@@ -45,6 +49,7 @@ fun AppNavGraph() {
 
     val cartItems = remember { mutableStateListOf<CartItem>() }
     val sentItems = remember { mutableStateListOf<SentItem>() }
+    val tableSessions = remember { mutableStateListOf<TableSession>() }
 
     var tableNumber by remember { mutableStateOf("") }
     var coversCount by remember { mutableStateOf(0) }
@@ -91,6 +96,9 @@ fun AppNavGraph() {
                     onKitchenMonitorClick = {
                         navController.navigate(Routes.KITCHEN_MONITOR)
                     },
+                    onTableMapClick = {
+                        navController.navigate(Routes.TABLE_MAP)
+                    },
                     onLogoutClick = {
                         loggedUser = null
                         navController.navigate(Routes.LOGIN) {
@@ -113,6 +121,25 @@ fun AppNavGraph() {
                     cartItems.clear()
                     sendRoundCounter = 1
                     currentCourse = 1
+
+                    val userName = loggedUser?.name.orEmpty()
+                    val existingIndex = tableSessions.indexOfFirst { it.tableNumber == tableNumber }
+
+                    val newSession = TableSession(
+                        tableNumber = tableNumber,
+                        waiterName = userName,
+                        coversCount = coversCount,
+                        coverPrice = coverPrice,
+                        items = emptyList(),
+                        status = TableStatus.OPEN
+                    )
+
+                    if (existingIndex >= 0) {
+                        tableSessions[existingIndex] = newSession
+                    } else {
+                        tableSessions.add(newSession)
+                    }
+
                     navController.navigate(Routes.NEW_ORDER)
                 },
                 onBackClick = {
@@ -132,8 +159,17 @@ fun AppNavGraph() {
                     currentCourse++
                 },
                 onAddProduct = { product, courseNumber, quantity ->
-    addToCart(cartItems, product, courseNumber, quantity)
-},
+                    addToCart(cartItems, product, courseNumber, quantity)
+                    syncCurrentTableSession(
+                        tableSessions = tableSessions,
+                        tableNumber = tableNumber,
+                        waiterName = loggedUser?.name.orEmpty(),
+                        coversCount = coversCount,
+                        coverPrice = coverPrice,
+                        items = cartItems,
+                        status = TableStatus.OPEN
+                    )
+                },
                 onBackClick = {
                     navController.popBackStack()
                 },
@@ -153,6 +189,15 @@ fun AppNavGraph() {
                 ),
                 onIncreaseItem = { item ->
                     updateItemQuantity(cartItems, item, item.quantity + 1)
+                    syncCurrentTableSession(
+                        tableSessions,
+                        tableNumber,
+                        loggedUser?.name.orEmpty(),
+                        coversCount,
+                        coverPrice,
+                        cartItems,
+                        TableStatus.OPEN
+                    )
                 },
                 onDecreaseItem = { item ->
                     if (item.quantity > 1) {
@@ -160,9 +205,27 @@ fun AppNavGraph() {
                     } else {
                         removeItem(cartItems, item)
                     }
+                    syncCurrentTableSession(
+                        tableSessions,
+                        tableNumber,
+                        loggedUser?.name.orEmpty(),
+                        coversCount,
+                        coverPrice,
+                        cartItems,
+                        TableStatus.OPEN
+                    )
                 },
                 onRemoveItem = { item ->
                     removeItem(cartItems, item)
+                    syncCurrentTableSession(
+                        tableSessions,
+                        tableNumber,
+                        loggedUser?.name.orEmpty(),
+                        coversCount,
+                        coverPrice,
+                        cartItems,
+                        TableStatus.OPEN
+                    )
                 },
                 onSendCourseClick = { courseNumber ->
                     if (tableNumber.isBlank()) return@CartScreen
@@ -192,6 +255,16 @@ fun AppNavGraph() {
                         sendRound = sendRoundCounter
                     )
 
+                    syncCurrentTableSession(
+                        tableSessions,
+                        tableNumber,
+                        loggedUser?.name.orEmpty(),
+                        coversCount,
+                        coverPrice,
+                        cartItems,
+                        TableStatus.OPEN
+                    )
+
                     sendRoundCounter++
 
                     if (currentCourse <= courseNumber) {
@@ -202,6 +275,11 @@ fun AppNavGraph() {
                     navController.popBackStack()
                 },
                 onCloseTableClick = {
+                    updateTableStatus(
+                        tableSessions = tableSessions,
+                        tableNumber = tableNumber,
+                        newStatus = TableStatus.CLOSED_NOT_PAID
+                    )
                     navController.navigate(Routes.CLOSE_TABLE)
                 }
             )
@@ -221,6 +299,12 @@ fun AppNavGraph() {
                     navController.popBackStack()
                 },
                 onConfirmCloseTableClick = {
+                    updateTableStatus(
+                        tableSessions = tableSessions,
+                        tableNumber = tableNumber,
+                        newStatus = TableStatus.PAID
+                    )
+
                     cartItems.clear()
                     tableNumber = ""
                     coversCount = 0
@@ -239,6 +323,26 @@ fun AppNavGraph() {
         composable(Routes.KITCHEN_MONITOR) {
             KitchenMonitorScreen(
                 sentItems = sentItems
+            )
+        }
+
+        composable(Routes.TABLE_MAP) {
+            TableMapScreen(
+                loggedUserName = loggedUser?.name.orEmpty(),
+                tableSessions = tableSessions,
+                onTableClick = { table ->
+                    tableNumber = table.tableNumber
+                    coversCount = table.coversCount
+                    coverPrice = table.coverPrice
+
+                    cartItems.clear()
+                    cartItems.addAll(table.items)
+
+                    navController.navigate(Routes.CART)
+                },
+                onBackClick = {
+                    navController.popBackStack()
+                }
             )
         }
     }
@@ -319,5 +423,39 @@ private fun markCourseAsSent(
                 sendRound = sendRound
             )
         }
+    }
+}
+
+private fun syncCurrentTableSession(
+    tableSessions: MutableList<TableSession>,
+    tableNumber: String,
+    waiterName: String,
+    coversCount: Int,
+    coverPrice: Double,
+    items: List<CartItem>,
+    status: TableStatus
+) {
+    val index = tableSessions.indexOfFirst { it.tableNumber == tableNumber }
+    if (index >= 0) {
+        tableSessions[index] = TableSession(
+            tableNumber = tableNumber,
+            waiterName = waiterName,
+            coversCount = coversCount,
+            coverPrice = coverPrice,
+            items = items.toList(),
+            status = status
+        )
+    }
+}
+
+private fun updateTableStatus(
+    tableSessions: MutableList<TableSession>,
+    tableNumber: String,
+    newStatus: TableStatus
+) {
+    val index = tableSessions.indexOfFirst { it.tableNumber == tableNumber }
+    if (index >= 0) {
+        val current = tableSessions[index]
+        tableSessions[index] = current.copy(status = newStatus)
     }
 }

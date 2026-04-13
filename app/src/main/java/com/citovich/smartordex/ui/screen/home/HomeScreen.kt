@@ -27,6 +27,7 @@ fun HomeScreen(
     onHistoryClick: () -> Unit,
     onAdminClick: () -> Unit,
     onKitchenMonitorClick: () -> Unit,
+    onTableMapClick: () -> Unit,
     onLogoutClick: () -> Unit
 ) {
     Scaffold(
@@ -59,6 +60,11 @@ fun HomeScreen(
             MainMenuButton(
                 text = "Nuovo Ordine",
                 onClick = onNewOrderClick
+            )
+
+            MainMenuButton(
+                text = "Mappa Tavoli",
+                onClick = onTableMapClick
             )
 
             MainMenuButton(
