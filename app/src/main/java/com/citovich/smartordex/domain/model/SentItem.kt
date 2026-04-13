@@ -1,6 +1,7 @@
 package com.citovich.smartordex.domain.model
 
 data class SentItem(
+    val id: String,
     val tableNumber: String,
     val productName: String,
     val quantity: Int,

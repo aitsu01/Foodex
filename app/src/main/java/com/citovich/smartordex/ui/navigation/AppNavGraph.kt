@@ -237,16 +237,17 @@ fun AppNavGraph() {
 
                     courseItemsToSend.forEach { item ->
                         sentItems.add(
-                            SentItem(
-                                tableNumber = tableNumber,
-                                productName = item.product.name,
-                                quantity = item.quantity,
-                                department = item.product.department,
-                                courseNumber = item.courseNumber,
-                                sendRound = sendRoundCounter,
-                                status = ItemSendStatus.SENT
-                            )
-                        )
+    SentItem(
+        id = "${tableNumber}_${item.product.id}_${item.courseNumber}_${sendRoundCounter}",
+        tableNumber = tableNumber,
+        productName = item.product.name,
+        quantity = item.quantity,
+        department = item.product.department,
+        courseNumber = item.courseNumber,
+        sendRound = sendRoundCounter,
+        status = ItemSendStatus.SENT
+    )
+)
                     }
 
                     markCourseAsSent(
@@ -320,11 +321,24 @@ fun AppNavGraph() {
             )
         }
 
-        composable(Routes.KITCHEN_MONITOR) {
-            KitchenMonitorScreen(
-                sentItems = sentItems
+       composable(Routes.KITCHEN_MONITOR) {
+    KitchenMonitorScreen(
+        sentItems = sentItems,
+        onStatusChange = { sentItem, newStatus ->
+            updateSentItemStatus(
+                sentItems = sentItems,
+                tableSessions = tableSessions,
+                currentTableNumber = tableNumber,
+                currentCartItems = cartItems,
+                sentItemId = sentItem.id,
+                newStatus = newStatus
             )
+        },
+        onBackClick = {
+            navController.popBackStack()
         }
+    )
+}
 
         composable(Routes.TABLE_MAP) {
             TableMapScreen(
@@ -457,5 +471,89 @@ private fun updateTableStatus(
     if (index >= 0) {
         val current = tableSessions[index]
         tableSessions[index] = current.copy(status = newStatus)
+    }
+}
+
+
+private fun updateSentItemStatus(
+    sentItems: MutableList<SentItem>,
+    tableSessions: MutableList<TableSession>,
+    currentTableNumber: String,
+    currentCartItems: MutableList<CartItem>,
+    sentItemId: String,
+    newStatus: ItemSendStatus
+) {
+    val index = sentItems.indexOfFirst { it.id == sentItemId }
+    if (index >= 0) {
+        val current = sentItems[index]
+        val updatedSentItem = current.copy(status = newStatus)
+        sentItems[index] = updatedSentItem
+
+        updateTableSessionItemStatus(
+            tableSessions = tableSessions,
+            tableNumber = updatedSentItem.tableNumber,
+            productName = updatedSentItem.productName,
+            courseNumber = updatedSentItem.courseNumber,
+            sendRound = updatedSentItem.sendRound,
+            newStatus = newStatus
+        )
+
+        if (updatedSentItem.tableNumber == currentTableNumber) {
+            updateCartItemStatus(
+                cartItems = currentCartItems,
+                productName = updatedSentItem.productName,
+                courseNumber = updatedSentItem.courseNumber,
+                sendRound = updatedSentItem.sendRound,
+                newStatus = newStatus
+            )
+        }
+    }
+}
+
+private fun updateCartItemStatus(
+    cartItems: MutableList<CartItem>,
+    productName: String,
+    courseNumber: Int,
+    sendRound: Int,
+    newStatus: ItemSendStatus
+) {
+    val index = cartItems.indexOfFirst {
+        it.product.name == productName &&
+            it.courseNumber == courseNumber &&
+            it.sendRound == sendRound
+    }
+
+    if (index >= 0) {
+        val current = cartItems[index]
+        cartItems[index] = current.copy(sendStatus = newStatus)
+    }
+}
+
+private fun updateTableSessionItemStatus(
+    tableSessions: MutableList<TableSession>,
+    tableNumber: String,
+    productName: String,
+    courseNumber: Int,
+    sendRound: Int,
+    newStatus: ItemSendStatus
+) {
+    val tableIndex = tableSessions.indexOfFirst { it.tableNumber == tableNumber }
+
+    if (tableIndex >= 0) {
+        val currentTable = tableSessions[tableIndex]
+
+        val updatedItems = currentTable.items.map { item ->
+            if (
+                item.product.name == productName &&
+                item.courseNumber == courseNumber &&
+                item.sendRound == sendRound
+            ) {
+                item.copy(sendStatus = newStatus)
+            } else {
+                item
+            }
+        }
+
+        tableSessions[tableIndex] = currentTable.copy(items = updatedItems)
     }
 }

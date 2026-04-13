@@ -154,7 +154,14 @@ private fun CourseSection(
     onSendCourseClick: () -> Unit
 ) {
     val hasPendingItems = items.any { it.sendStatus == ItemSendStatus.NOT_SENT }
-    val allSent = items.all { it.sendStatus != ItemSendStatus.NOT_SENT }
+
+val courseStatusText = when {
+    items.all { it.sendStatus == ItemSendStatus.READY } -> "Stato: pronta"
+    items.any { it.sendStatus == ItemSendStatus.PREPARING } -> "Stato: in preparazione"
+    items.all { it.sendStatus == ItemSendStatus.SENT || it.sendStatus == ItemSendStatus.READY } &&
+        items.none { it.sendStatus == ItemSendStatus.NOT_SENT } -> "Stato: inoltrata"
+    else -> "Stato: da inoltrare"
+}
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -167,9 +174,9 @@ private fun CourseSection(
             )
 
             Text(
-                text = if (allSent) "Stato: già inoltrata" else "Stato: da inoltrare",
-                style = MaterialTheme.typography.bodyMedium
-            )
+    text = courseStatusText,
+    style = MaterialTheme.typography.bodyMedium
+)
 
             items.forEach { item ->
                 CourseItemRow(
